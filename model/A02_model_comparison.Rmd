@@ -1,0 +1,89 @@
+---
+title: "Model comparison"
+output: 
+    github_document:
+    fig_width: 8
+    fig_height: 5
+    keep_html: TRUE
+---
+
+```{r setup, include=FALSE}
+library(rstan)
+library(loo)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(tidyr)
+
+theme_set(theme_classic() + theme(text = element_text(size = 14)))
+
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+```
+
+
+```{r}
+# Load model objects
+rdm1_model = readRDS('RDM1_hier_fit.RData')
+rdm2_model = readRDS('RDM2_hier_fit.RData')
+rdm3_model = readRDS('RDM3_hier_fit.RData')
+rdm4_model = readRDS('RDM4_hier_fit.RData')
+rdm5_model = readRDS('RDM5_hier_fit.RData')
+rdm6_model = readRDS('RDM6_hier_fit.RData')
+
+# get LOO
+loo1 = loo(rdm1_model)
+loo2 = loo(rdm2_model)
+loo3 = loo(rdm3_model)
+loo4 = loo(rdm4_model)
+loo5 = loo(rdm5_model)
+loo6 = loo(rdm6_model)
+
+loo_result = loo_compare(loo1, loo2, loo3, loo4, loo5, loo6)
+print(loo_result)
+```
+
+```{r}
+tmp = as.data.frame(loo_result) %>%
+  mutate(modelName = row.names(loo_result), 
+         looic = round(looic, 2)) %>%
+  select(modelName, looic) %>%
+  arrange(modelName) %>%
+  mutate(decision_evidence = ifelse(modelName %in% c("model1", "model3", "model5"),
+                                    "Direction only", "Direction+Strength"),
+         attention_type = ifelse(modelName %in% c("model1", "model2"),
+                                 "Baseline", 
+                                 ifelse(modelName %in% c("model3", "model4"), 
+                                        "Multiplicative", "Additive"))) %>%
+  mutate(decision_evidence = factor(decision_evidence, 
+                                    levels = c("Direction only", "Direction+Strength")),
+         attention_type = factor(attention_type, 
+                                 levels = c("Baseline", "Multiplicative", "Additive")))
+
+```
+
+
+```{r looic, include = TRUE}
+ggplot(tmp, aes(x = attention_type, y = decision_evidence, fill = looic)) +
+  geom_tile(color = "white", lwd = 1.5, linetype = 1) + 
+  geom_text(aes(label = looic), color = "white", size = 4) +
+  scale_fill_gradient(high = "firebrick2",  low = "royalblue") + 
+  labs(x = "Attention", y = "Decision Evidence ", fill = "LOOIC") + 
+  theme(text = element_text(size = 15))
+```
+
+```{r de_marginal, include = TRUE}
+ggplot(tmp, aes(y = decision_evidence, x = looic)) + 
+  geom_boxplot() + 
+  labs(y = "", x = "LOOIC", 
+       title = "Decision evidence")
+```
+
+```{r attention_marginal, include = TRUE}
+ggplot(tmp, aes(y = attention_type, x = looic)) + 
+  geom_boxplot() + 
+  labs(y = "", x = "LOOIC", 
+       title = "Attention")
+```
+
+
+
