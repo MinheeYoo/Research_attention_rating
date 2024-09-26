@@ -1,0 +1,194 @@
+---
+title: "RDM6 Posterior distribution"
+output: 
+  github_document:
+    fig_width: 8
+    fig_height: 8
+    keep_html: TRUE
+---
+
+
+```{r}
+rm(list=ls()) 
+
+library(rstan)
+library(posterior)
+library(ggplot2)
+library(bayesplot)
+library(dplyr)
+library(tidyr)
+
+theme_set(theme_classic() + theme(text = element_text(size = 13)))
+
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+model_obj = readRDS('RDM6_hier_fit.RData')
+```
+
+
+```{r}
+param_summary = summarise_draws(
+  subset_draws(as_draws_df(model_obj), 
+               variable = c("a_mu_raw", "a_sd", "a",
+                            "v_beta_mu", "v_beta_sd", "v_beta", 
+                            "theta_mu_raw", "theta_sd", "theta")))
+```
+
+# R hat value
+
+: Check whether r hat value of all parameter is smaller than 1.01 
+
+```{r}
+# check R hat 
+print(sprintf("R hat value larger than 1.01?: %s", 
+              any(param_summary$rhat > 1.01)))
+
+print(sprintf("Min R hat value: %f", 
+              min(param_summary$rhat)))
+
+print(sprintf("Max R hat value: %f", 
+              max(param_summary$rhat)))
+```
+
+# Effective sample size 
+
+: Check whether effective sample size is larger than 400
+
+```{r}
+# effective sample size should be > 400 
+print(sprintf("ESS in bulk less than 400?: %s", 
+              any(param_summary$ess_bulk < 400)))
+
+print(sprintf("ESS in tail less than 400?: %s", 
+              any(param_summary$ess_tail < 400)))
+
+print(sprintf("minimum ESS in bulk: %f", min(param_summary$ess_bulk)))
+print(sprintf("minimum ESS in tail: %f", min(param_summary$ess_tail)))
+```
+
+
+# Traceplot 
+
+## Group level parameters
+
+```{r trace_group}
+# boundary
+mcmc_trace(model_obj, pars = c("a_mu_raw", "a_sd",
+                               "theta_mu_raw", "theta_sd")) 
+
+# beta on drift 
+mcmc_trace(model_obj, pars = c(sprintf("v_beta_mu[%d]", 1:3), 
+                               sprintf("v_beta_sd[%d]", 1:3)))
+```
+
+## Individual level parameters 
+
+```{r trace_ind}
+# boundary
+mcmc_trace(model_obj, pars = c(sprintf("a[%d]", 1:16))) 
+mcmc_trace(model_obj, pars = c(sprintf("a[%d]", 17:32)))
+mcmc_trace(model_obj, pars = c(sprintf("a[%d]", 33:46))) 
+
+# v0
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[1,%d]", 1:16))) 
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[1,%d]", 17:32)))
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[1,%d]", 33:46))) 
+
+# v1
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[2,%d]", 1:16))) 
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[2,%d]", 17:32)))
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[2,%d]", 33:46))) 
+
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[3,%d]", 1:16))) 
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[3,%d]", 17:32)))
+mcmc_trace(model_obj, pars = c(sprintf("v_beta[3,%d]", 33:46))) 
+
+mcmc_trace(model_obj, pars = c(sprintf("theta[%d]", 1:16))) 
+mcmc_trace(model_obj, pars = c(sprintf("theta[%d]", 17:32)))
+mcmc_trace(model_obj, pars = c(sprintf("theta[%d]", 33:46))) 
+```
+
+
+# Sampler diagnostic 
+
+```{r}
+posterior <- as.array(model_obj)
+
+np <- nuts_params(model_obj)
+lp <- log_posterior(model_obj)
+```
+
+## Acceptance
+```{r sample_accept}
+mcmc_nuts_acceptance(np, lp)
+```
+
+## Divergence
+```{r sample_diver}
+mcmc_nuts_divergence(np, lp)
+```
+
+
+```{r}
+# mcmc_nuts_stepsize(np, lp)
+```
+
+```{r}
+# mcmc_nuts_treedepth(np, lp)
+```
+
+
+# Correlation between posterior samples
+```{r sample_cor_group1}
+mcmc_pairs(posterior, np = np, 
+           pars = c("a_mu_raw", "a_sd", 
+                    "theta_mu_raw", "theta_sd", "lp__"),
+           off_diag_args = list(size = 0.75))
+```
+
+
+
+```{r sample_cor_group2}
+mcmc_pairs(posterior, np = np, 
+           pars = c(sprintf("v_beta_mu[%d]", 1:3), 
+                    sprintf("v_beta_sd[%d]", 1:3),"lp__"),
+           off_diag_args = list(size = 0.75))
+```
+
+# Posterior distributions
+## Group level
+```{r posterior_group}
+mcmc_dens_overlay(model_obj, pars = c("a_mu_raw", "a_sd",
+                                      "theta_mu_raw", "theta_sd",
+                                      sprintf("v_beta_mu[%d]", 1:3), 
+                                      sprintf("v_beta_sd[%d]", 1:3)))
+```
+
+## Individual level
+
+```{r posterior_ind}
+mcmc_dens_overlay(model_obj, pars = sprintf("a[%d]", 1:16))
+mcmc_dens_overlay(model_obj, pars = sprintf("a[%d]", 17:32))
+mcmc_dens_overlay(model_obj, pars = sprintf("a[%d]", 33:46))
+
+mcmc_dens_overlay(model_obj, pars = sprintf("theta[%d]", 1:16))
+mcmc_dens_overlay(model_obj, pars = sprintf("theta[%d]", 17:32))
+mcmc_dens_overlay(model_obj, pars = sprintf("theta[%d]", 33:46))
+
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[1,%d]", 1:16))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[1,%d]", 17:32))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[1,%d]", 33:46))
+
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 1:16))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 17:32))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 33:46))
+
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 1:16))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 17:32))
+mcmc_dens_overlay(model_obj, pars = sprintf("v_beta[2,%d]", 33:46))
+```
+
+
+
